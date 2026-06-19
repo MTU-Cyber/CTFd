@@ -4,12 +4,13 @@ services:
     user: root
     restart: always
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
+      - SECRET_KEY=c1656917a1f41c79d7589f3404b49bee508b95ef7fa58cb3c6cad510f578b0399449d1ce9941a3c56b4a402ee4c9fe5851cd76addb76e01b628e8829ca128d4a
       - UPLOAD_FOLDER=/var/uploads
       - DATABASE_URL=mysql+pymysql://ctfd:ctfd@db/ctfd
       - REDIS_URL=redis://cache:6379
-      - WORKERS=1
+      - WORKERS=4
       - LOG_FOLDER=/var/log/CTFd
       - ACCESS_LOG=-
       - ERROR_LOG=-
@@ -24,15 +25,15 @@ services:
         default:
         internal:
 
-  nginx:
-    image: nginx:stable
-    restart: always
-    volumes:
-      - ./conf/nginx/http.conf:/etc/nginx/nginx.conf
-    ports:
-      - 80:80
-    depends_on:
-      - ctfd
+#nginx:
+#    image: nginx:stable
+#    restart: always
+#    volumes:
+#      - ./conf/nginx/http.conf:/etc/nginx/nginx.conf
+#    ports:
+#      - 80:80
+#    depends_on:
+#      - ctfd
 
   db:
     image: mariadb:10.11
