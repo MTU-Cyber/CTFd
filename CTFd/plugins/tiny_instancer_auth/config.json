@@ -1,0 +1,6 @@
+{
+  "name": "Tiny Instancer Authentication",
+  "version": "1.0.0",
+  "description": "Issues short-lived signed team tokens to tiny-instancer",
+  "route": "/instancer/auth"
+}

@@ -6,19 +6,22 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      - SECRET_KEY=c1656917a1f41c79d7589f3404b49bee508b95ef7fa58cb3c6cad510f578b0399449d1ce9941a3c56b4a402ee4c9fe5851cd76addb76e01b628e8829ca128d4a
+      - SECRET_KEY=${CTFD_SECRET_KEY:?Set CTFD_SECRET_KEY in .env}
       - UPLOAD_FOLDER=/var/uploads
-      - DATABASE_URL=mysql+pymysql://ctfd:ctfd@db/ctfd
-      - REDIS_URL=redis://cache:6379
+      - DATABASE_URL=mysql+pymysql://ctfd:${CTFD_DB_PASSWORD:?Set CTFD_DB_PASSWORD in .env}@db/ctfd
+      - REDIS_URL=redis://:${CTFD_REDIS_PASSWORD:?Set CTFD_REDIS_PASSWORD in .env}@cache:6379
       - WORKERS=4
       - LOG_FOLDER=/var/log/CTFd
       - ACCESS_LOG=-
       - ERROR_LOG=-
       - REVERSE_PROXY=true
+      - TINY_INSTANCER_AUTH_SECRET=${TINY_INSTANCER_AUTH_SECRET:?Set TINY_INSTANCER_AUTH_SECRET in .env}
+      - TINY_INSTANCER_CALLBACK_URL=https://instances.cyberctfhub.ie/auth
     volumes:
       - .data/CTFd/logs:/var/log/CTFd
       - .data/CTFd/uploads:/var/uploads
       - .:/opt/CTFd:ro
+      - ../WS26Friendly:/challenges:ro
     depends_on:
       - db
     networks:
@@ -39,9 +42,9 @@ services:
     image: mariadb:10.11
     restart: always
     environment:
-      - MARIADB_ROOT_PASSWORD=ctfd
+      - MARIADB_ROOT_PASSWORD=${CTFD_DB_ROOT_PASSWORD:?Set CTFD_DB_ROOT_PASSWORD in .env}
       - MARIADB_USER=ctfd
-      - MARIADB_PASSWORD=ctfd
+      - MARIADB_PASSWORD=${CTFD_DB_PASSWORD:?Set CTFD_DB_PASSWORD in .env}
       - MARIADB_DATABASE=ctfd
       - MARIADB_AUTO_UPGRADE=1
     volumes:
@@ -54,6 +57,7 @@ services:
   cache:
     image: redis:4
     restart: always
+    command: ["redis-server", "--requirepass", "${CTFD_REDIS_PASSWORD:?Set CTFD_REDIS_PASSWORD in .env}"]
     volumes:
     - .data/redis:/data
     networks:

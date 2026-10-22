@@ -70,6 +70,7 @@ flask_profiler.sql
 .ruff_cache/
 
 # CTFd-specific
+.env
 CTFd/static/uploads
 CTFd/uploads
 .data/
@@ -87,6 +88,8 @@ CTFd/plugins/*
 !CTFd/plugins/dynamic_challenges/
 !CTFd/plugins/flags/
 !CTFd/plugins/*.py
+!CTFd/plugins/tiny_instancer_auth/
+!CTFd/plugins/tiny_instancer_auth/**
 
 # non-default themes
 CTFd/themes/*
