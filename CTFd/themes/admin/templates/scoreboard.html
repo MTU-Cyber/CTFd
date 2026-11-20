@@ -56,6 +56,12 @@
 {% endblock %}
 
 {% block scripts %}
+	<script>
+		if (window.EventSource) {
+			const scoreboardEvents = new EventSource("{{ url_for('events.subscribe_scoreboard') }}");
+			scoreboardEvents.addEventListener("scoreboard", () => window.location.reload());
+		}
+	</script>
 {% endblock %}
 
 {% block entrypoint %}

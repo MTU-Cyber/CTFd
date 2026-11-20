@@ -83,7 +83,7 @@ class RedisEventManager(EventManager):
         def _listen():
             while True:
                 pubsub = self.client.pubsub()
-                pubsub.subscribe(channel)
+                pubsub.subscribe(channel, "scoreboard")
                 try:
                     while True:
                         message = pubsub.get_message(
@@ -92,8 +92,12 @@ class RedisEventManager(EventManager):
                         if message:
                             if message["type"] == "message":
                                 event = json.loads(message["data"])
+                                message_channel = message["channel"]
+                                if isinstance(message_channel, bytes):
+                                    message_channel = message_channel.decode()
                                 for client in list(self.clients.values()):
-                                    client[channel].put(event)
+                                    if message_channel in client:
+                                        client[message_channel].put(event)
                 finally:
                     pubsub.close()
 

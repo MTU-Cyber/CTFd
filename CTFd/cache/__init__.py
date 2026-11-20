@@ -131,6 +131,8 @@ def clear_config():
 
 
 def clear_standings():
+    from flask import current_app
+
     from CTFd.api import api
     from CTFd.api.v1.scoreboard import ScoreboardDetail, ScoreboardList
     from CTFd.constants.static import CacheKeys
@@ -176,6 +178,9 @@ def clear_standings():
 
     # Clear out scoreboard templates
     cache.delete(make_template_fragment_key(CacheKeys.PUBLIC_SCOREBOARD_TABLE))
+
+    # Let open scoreboard pages fetch the new standings immediately.
+    current_app.events_manager.publish(data="changed", type="scoreboard", channel="scoreboard")
 
 
 def clear_challenges():
