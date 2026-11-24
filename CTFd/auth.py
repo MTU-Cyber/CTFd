@@ -1,6 +1,5 @@
 import requests
 from flask import Blueprint, abort, redirect, render_template, request, session, url_for
-from flask import current_app as app
 from flask_babel import lazy_gettext as _l
 
 from CTFd.cache import cache, clear_team_session, clear_user_session
@@ -15,7 +14,7 @@ from CTFd.utils.config import can_send_mail, is_teams_mode
 from CTFd.utils.config.integrations import mlc_registration
 from CTFd.utils.config.visibility import registration_visible
 from CTFd.utils.crypto import verify_password
-from CTFd.utils.decorators import ratelimit
+from CTFd.utils.decorators import ratelimit_from_config
 from CTFd.utils.decorators.visibility import check_registration_visibility
 from CTFd.utils.helpers import error_for, get_errors, markup
 from CTFd.utils.logging import log
@@ -34,7 +33,7 @@ auth = Blueprint("auth", __name__)
 
 @auth.route("/confirm", methods=["POST", "GET"])
 @auth.route("/confirm/<data>", methods=["POST", "GET"])
-@ratelimit(method="POST", limit=10, interval=60)
+@ratelimit_from_config(method="POST", config_key="RATELIMIT_CONFIRM")
 def confirm(data=None):
     # If we can't send mails our behavior depends on verify_emails
     if not can_send_mail():
@@ -116,7 +115,7 @@ def confirm(data=None):
 
 @auth.route("/reset_password", methods=["POST", "GET"])
 @auth.route("/reset_password/<data>", methods=["POST", "GET"])
-@ratelimit(method="POST", limit=10, interval=60)
+@ratelimit_from_config(method="POST", config_key="RATELIMIT_RESET_PASSWORD")
 def reset_password(data=None):
     if config.can_send_mail() is False and data is None:
         return render_template(
@@ -233,7 +232,7 @@ def reset_password(data=None):
 
 @auth.route("/register", methods=["POST", "GET"])
 @check_registration_visibility
-@ratelimit(method="POST", limit=10, interval=5)
+@ratelimit_from_config(method="POST", config_key="RATELIMIT_REGISTER")
 def register():
     errors = get_errors()
     if current_user.authed():
@@ -370,56 +369,55 @@ def register():
                 password=request.form["password"],
             )
         else:
-            with app.app_context():
-                user = Users(
-                    name=name,
-                    email=email_address,
-                    password=password,
-                    bracket_id=bracket_id,
+            user = Users(
+                name=name,
+                email=email_address,
+                password=password,
+                bracket_id=bracket_id,
+            )
+
+            if website:
+                user.website = website
+            if affiliation:
+                user.affiliation = affiliation
+            if country:
+                user.country = country
+
+            db.session.add(user)
+            db.session.commit()
+            db.session.flush()
+
+            for field_id, value in entries.items():
+                entry = UserFieldEntries(
+                    field_id=field_id, value=value, user_id=user.id
                 )
+                db.session.add(entry)
+            db.session.commit()
 
-                if website:
-                    user.website = website
-                if affiliation:
-                    user.affiliation = affiliation
-                if country:
-                    user.country = country
+            login_user(user)
 
-                db.session.add(user)
-                db.session.commit()
-                db.session.flush()
+            if request.args.get("next") and validators.is_safe_url(
+                request.args.get("next")
+            ):
+                return redirect(request.args.get("next"))
 
-                for field_id, value in entries.items():
-                    entry = UserFieldEntries(
-                        field_id=field_id, value=value, user_id=user.id
-                    )
-                    db.session.add(entry)
-                db.session.commit()
-
-                login_user(user)
-
-                if request.args.get("next") and validators.is_safe_url(
-                    request.args.get("next")
-                ):
-                    return redirect(request.args.get("next"))
-
-                if config.can_send_mail() and get_config(
-                    "verify_emails"
-                ):  # Confirming users is enabled and we can send email.
-                    log(
-                        "registrations",
-                        format="[{date}] {ip} - {name} registered (UNCONFIRMED) with {email}",
-                        name=user.name,
-                        email=user.email,
-                    )
-                    email.verify_email_address(user.email)
-                    db.session.close()
-                    return redirect(url_for("auth.confirm"))
-                else:  # Don't care about confirming users
-                    if (
-                        config.can_send_mail()
-                    ):  # We want to notify the user that they have registered.
-                        email.successful_registration_notification(user.email)
+            if config.can_send_mail() and get_config(
+                "verify_emails"
+            ):  # Confirming users is enabled and we can send email.
+                log(
+                    "registrations",
+                    format="[{date}] {ip} - {name} registered (UNCONFIRMED) with {email}",
+                    name=user.name,
+                    email=user.email,
+                )
+                email.verify_email_address(user.email)
+                db.session.close()
+                return redirect(url_for("auth.confirm"))
+            else:  # Don't care about confirming users
+                if (
+                    config.can_send_mail()
+                ):  # We want to notify the user that they have registered.
+                    email.successful_registration_notification(user.email)
 
         log(
             "registrations",
@@ -438,7 +436,7 @@ def register():
 
 
 @auth.route("/login", methods=["POST", "GET"])
-@ratelimit(method="POST", limit=10, interval=5)
+@ratelimit_from_config(method="POST", config_key="RATELIMIT_LOGIN")
 def login():
     errors = get_errors()
     if request.method == "POST":
@@ -543,7 +541,7 @@ def oauth_login():
 
 
 @auth.route("/redirect", methods=["GET"])
-@ratelimit(method="GET", limit=10, interval=60)
+@ratelimit_from_config(method="GET", config_key="RATELIMIT_OAUTH_REDIRECT")
 def oauth_redirect():
     oauth_code = request.args.get("code")
     state = request.args.get("state")

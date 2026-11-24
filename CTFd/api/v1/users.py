@@ -26,7 +26,7 @@ from CTFd.schemas.submissions import SubmissionSchema
 from CTFd.schemas.users import UserSchema
 from CTFd.utils.challenges import get_submissions_for_user_id_for_challenge_id
 from CTFd.utils.config import get_config, get_mail_provider
-from CTFd.utils.decorators import admins_only, authed_only, ratelimit
+from CTFd.utils.decorators import admins_only, authed_only, ratelimit_from_config
 from CTFd.utils.decorators.visibility import (
     check_account_visibility,
     check_score_visibility,
@@ -514,9 +514,10 @@ class UserEmails(Resource):
         description="Endpoint to email a User object",
         responses={200: ("Success", "APISimpleSuccessResponse")},
     )
-    @ratelimit(method="POST", limit=10, interval=60)
+    @ratelimit_from_config(method="POST", config_key="RATELIMIT_EMAIL_USER")
     def post(self, user_id):
         req = request.get_json()
+        subject = (req.get("subject") or "").strip()
         text = req.get("text", "").strip()
         user = Users.query.filter_by(id=user_id).first_or_404()
 
@@ -532,7 +533,10 @@ class UserEmails(Resource):
                 400,
             )
 
-        result, response = sendmail(addr=user.email, text=text)
+        if subject:
+            result, response = sendmail(addr=user.email, text=text, subject=subject)
+        else:
+            result, response = sendmail(addr=user.email, text=text)
 
         if result is True:
             return {"success": True}
