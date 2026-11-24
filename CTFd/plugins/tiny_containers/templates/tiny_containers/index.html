@@ -1,0 +1,191 @@
+{% extends "admin/base.html" %}
+
+{% block stylesheets %}
+<link rel="stylesheet" href="{{ url_for('tiny_containers.static', filename='containers.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="jumbotron"><div class="container-fluid px-4"><h1>Tiny-Containers</h1></div></div>
+<div class="container-fluid px-4">
+  <div id="tc-message" class="alert d-none" role="alert"></div>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <button class="btn btn-primary" id="tc-add">Add challenge</button>
+    <button class="btn btn-outline-secondary" id="tc-settings">Settings</button>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover" id="tc-table">
+      <thead><tr><th>Challenge</th><th>Status</th><th>CPU</th><th>Memory</th><th>CTFd</th><th>Endpoint</th><th>Controls</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr data-id="{{ row.challenge.id }}" tabindex="0" style="cursor:pointer">
+          <td>{{ row.challenge.name }}</td>
+          <td data-field="status">{{ row.status }}</td>
+          <td data-field="cpu">{{ row.metrics.cpu }}</td>
+          <td data-field="memory">{{ row.metrics.memory }}</td>
+          <td data-field="visible">{{ 'Visible' if row.challenge.state == 'visible' else 'Hidden' }}</td>
+          <td class="tc-endpoint-cell">{% if row.record.protocol == 'http' %}<a href="{{ row.endpoint }}" target="_blank" rel="noopener">{{ row.endpoint }}</a>{% else %}<code>{{ row.endpoint }}</code>{% endif %}</td>
+          <td class="tc-row-controls">
+            <button class="btn btn-sm btn-outline-primary {{ 'd-none' if row.running else '' }}" data-row-action="launch" {{ 'disabled' if row.status == 'unavailable' else '' }}>Start</button>
+            <button class="btn btn-sm btn-outline-primary {{ '' if row.running else 'd-none' }}" data-row-action="restart" {{ 'disabled' if row.status == 'unavailable' else '' }}>Restart</button>
+            <button class="btn btn-sm btn-outline-danger {{ '' if row.running else 'd-none' }}" data-row-action="stop" {{ 'disabled' if row.status == 'unavailable' else '' }}>Stop</button>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <section id="tc-build-pane" class="card d-none" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:calc(100vw - 32px);max-width:760px;max-height:calc(100vh - 32px);overflow-y:auto;z-index:1041" aria-label="Build challenge">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h4 mb-0">Build challenge</h2>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-close-pane>Close</button>
+      </div>
+      <div class="tc-local-message alert d-none" role="alert"></div>
+      <form id="tc-build-form">
+        <div class="form-group">
+          <label for="tc-challenge-search">CTFd challenge</label>
+          <div id="tc-challenge-picker">
+            <input id="tc-challenge-search" class="form-control" type="search" placeholder="Search challenges by name or category" autocomplete="off">
+            <div id="tc-challenge-results" class="list-group mt-1" style="max-height:220px;overflow-y:auto"></div>
+            {% if not available_challenges %}<p class="text-muted mt-2 mb-0">No challenges are marked for tiny-containers. Enable the toggle on a CTFd challenge first.</p>{% endif %}
+          </div>
+          <div id="tc-challenge-picked" class="d-none">
+            <strong id="tc-challenge-name"></strong>
+            <button id="tc-change-challenge" class="btn btn-sm btn-link" type="button">Change</button>
+          </div>
+          <input id="tc-challenge" type="hidden" required>
+        </div>
+        <div id="tc-build-details" class="d-none">
+          <div class="form-group tc-compose-picker">
+            <label>Compose file</label>
+            <input class="form-control tc-compose-search" type="search" placeholder="Search Compose files" autocomplete="off">
+            <input name="compose_file" type="hidden" required>
+            <div class="tc-compose-results list-group mt-1" style="max-height:220px;overflow-y:auto"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group col-md-3"><label>Access type<select class="form-control" name="protocol"><option value="http">HTTP</option><option value="tcp">TCP</option></select></label></div>
+            <div class="form-group col-md-3"><label>Port<input class="form-control" type="number" name="port" min="1" max="65535" required></label></div>
+            <div class="form-group col-md-6 tc-subdomain-group"><label for="tc-build-subdomain">Subdomain</label><div class="input-group"><input id="tc-build-subdomain" class="form-control" name="subdomain" pattern="[a-z0-9-]+" required><div class="input-group-append"><span class="input-group-text tc-domain-suffix"></span></div></div></div>
+          </div>
+          <button class="btn btn-primary" type="submit">Build</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <aside id="tc-pane" class="tc-drawer d-none" role="dialog" aria-modal="true" aria-label="Project details">
+    <div class="tc-drawer-header">
+      <div><small class="text-muted">tiny-containers / challenge</small><h2 id="tc-title" class="h4 mb-0"></h2></div>
+      <button class="close" type="button" data-close-pane aria-label="Close"><span aria-hidden="true">&times;</span></button>
+      <div class="tc-drawer-tools">
+        <button class="btn btn-sm btn-outline-secondary" type="button" id="tc-open-logs"><i class="fas fa-file-alt" aria-hidden="true"></i> Logs</button>
+        <button class="btn btn-sm btn-outline-danger d-none" type="button" id="tc-remove"><i class="fas fa-trash-alt" aria-hidden="true"></i> Delete</button>
+        <button class="btn btn-sm btn-primary" type="button" id="tc-edit-deployment"><i class="fas fa-edit" aria-hidden="true"></i> <span>Edit</span></button>
+      </div>
+    </div>
+    <div class="tc-drawer-body">
+      <div class="tc-local-message alert d-none" role="alert"></div>
+      <div class="tc-project-summary">
+        <div><small>Container status</small><strong id="tc-detail-status"></strong></div>
+        <div><small>Player endpoint</small><code id="tc-endpoint"></code></div>
+      </div>
+      <section class="tc-section">
+        <h3 class="h6">Runtime</h3>
+        <div class="tc-action-row">
+          <button class="btn btn-primary" data-action="launch">Launch</button>
+          <button class="btn btn-outline-primary" data-action="restart">Restart</button>
+          <button class="btn btn-outline-danger" data-action="stop">Stop</button>
+        </div>
+      </section>
+      <section class="tc-section tc-visibility-row">
+        <div><h3 class="h6 mb-1">CTFd visibility</h3><small class="text-muted">Independent of container status</small></div>
+        <div class="custom-control custom-switch">
+          <input type="checkbox" class="custom-control-input" id="tc-visible">
+          <label class="custom-control-label" for="tc-visible">Visible</label>
+        </div>
+      </section>
+      <section class="tc-section">
+        <h3 class="h6 mb-0">Deployment</h3>
+        <div id="tc-deployment-summary" class="tc-deployment-summary"></div>
+        <form id="tc-config" class="d-none mt-3">
+          <div class="form-group tc-compose-picker">
+            <label>Compose file</label>
+            <input class="form-control tc-compose-search" type="search" placeholder="Search Compose files" autocomplete="off">
+            <input name="compose_file" type="hidden" required>
+            <div class="tc-compose-results list-group mt-1" style="max-height:220px;overflow-y:auto"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group col-sm-4"><label>Access type<select class="form-control" name="protocol"><option value="http">HTTP</option><option value="tcp">TCP</option></select></label></div>
+            <div class="form-group col-sm-4"><label>Port<input class="form-control" type="number" name="port" min="1" max="65535" required></label></div>
+            <div class="form-group col-sm-4 tc-subdomain-group"><label for="tc-subdomain">Subdomain</label><input id="tc-subdomain" class="form-control" name="subdomain" pattern="[a-z0-9-]+" required></div>
+          </div>
+          <small class="text-muted d-block mb-3 tc-subdomain-group">Subdomain suffix: <span class="tc-domain-suffix"></span></small>
+        </form>
+      </section>
+      <section class="tc-section tc-health-section">
+        <h3 class="h6 mb-2">Container health</h3>
+        <div class="table-responsive"><table class="table table-sm mb-0">
+          <thead><tr><th>Service</th><th>Container</th><th>State</th><th>Health</th></tr></thead>
+          <tbody id="tc-health"></tbody>
+        </table></div>
+      </section>
+    </div>
+  </aside>
+
+  <section id="tc-settings-pane" class="card d-none" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:calc(100vw - 32px);max-width:760px;max-height:calc(100vh - 32px);overflow-y:auto;z-index:1041"><div class="card-body">
+    <h2 class="h4">Settings</h2>
+    <div class="tc-local-message alert d-none" role="alert"></div>
+    <form id="tc-settings-form">
+      <label>Minutes after CTF end before containers stop
+        <input type="number" class="form-control" name="grace_minutes" min="0" max="1440" value="{{ grace_minutes }}" required>
+      </label>
+      <p>{{ 'No CTF end time is set; automatic stopping is disabled.' if deadline is none else 'Automatic stop follows the configured CTF end time.' }}</p>
+      <button class="btn btn-primary" type="submit">Save</button>
+    </form>
+  </div></section>
+</div>
+<div id="tc-backdrop" class="d-none" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1040"></div>
+<div id="tc-logs-view" class="d-none" style="position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.65);padding:3vh 3vw">
+  <div class="card h-100">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h2 class="h5 mb-0">Container logs</h2>
+      <button class="btn btn-sm btn-outline-secondary" type="button" id="tc-close-logs">Close</button>
+    </div>
+    <div class="card-body overflow-auto"><pre id="tc-logs" class="mb-0"></pre></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.tinyContainers = {
+    root: {{ url_for('tiny_containers.index') | tojson }},
+    nonce: {{ Session.nonce | tojson }},
+    files: {{ files | tojson }},
+    challenges: [
+      {% for challenge in available_challenges %}
+        {{ {'id': challenge.id, 'name': challenge.name, 'category': challenge.category} | tojson }}{{ ',' if not loop.last else '' }}
+      {% endfor %}
+    ],
+    records: {
+      {% for row in rows %}
+        {{ row.challenge.id | tojson }}: {{ {
+          'name': row.challenge.name,
+          'compose_file': row.record.compose_file,
+          'host_port': row.record.host_port,
+          'subdomain': row.record.subdomain,
+          'protocol': row.record.protocol,
+          'endpoint': row.endpoint,
+          'status': row.status,
+          'running': row.running,
+          'services': row.services,
+          'visible': row.challenge.state == 'visible'
+        } | tojson }}{{ ',' if not loop.last else '' }}
+      {% endfor %}
+    },
+    requestedChallenge: {{ requested_challenge | tojson }}
+  };
+</script>
+<script src="{{ url_for('tiny_containers.static', filename='containers.js') }}"></script>
+{% endblock %}

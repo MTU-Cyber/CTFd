@@ -1,0 +1,6 @@
+{
+  "name": "Tiny-Containers",
+  "version": "1.0.0",
+  "description": "Manage global challenge containers from CTFd",
+  "route": "/admin/containers"
+}

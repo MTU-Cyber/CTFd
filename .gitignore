@@ -90,6 +90,8 @@ CTFd/plugins/*
 !CTFd/plugins/*.py
 !CTFd/plugins/tiny_instancer_auth/
 !CTFd/plugins/tiny_instancer_auth/**
+!CTFd/plugins/tiny_containers/
+!CTFd/plugins/tiny_containers/**
 
 # non-default themes
 CTFd/themes/*

@@ -1,6 +1,7 @@
 services:
   ctfd:
     build: .
+    image: ctfd-ctfd
     user: root
     restart: always
     ports:
@@ -17,11 +18,18 @@ services:
       - REVERSE_PROXY=true
       - TINY_INSTANCER_AUTH_SECRET=${TINY_INSTANCER_AUTH_SECRET:?Set TINY_INSTANCER_AUTH_SECRET in .env}
       - TINY_INSTANCER_CALLBACK_URL=https://instances.cyberctfhub.ie/auth
+      - TINY_CONTAINERS_REPO=${TINY_CONTAINERS_REPO_PATH:?Set TINY_CONTAINERS_REPO_PATH in .env}
+      - TINY_CONTAINERS_DOMAIN=${TINY_CONTAINERS_DOMAIN:?Set TINY_CONTAINERS_DOMAIN in .env}
+      - TINY_CONTAINERS_HTTP_PORT=${TINY_CONTAINERS_HTTP_PORT:-8080}
+      - TINY_CONTAINERS_PROXY_NETWORK=${TINY_CONTAINERS_PROXY_NETWORK:-tiny-containers-proxy}
     volumes:
       - .data/CTFd/logs:/var/log/CTFd
       - .data/CTFd/uploads:/var/uploads
       - .:/opt/CTFd:ro
       - ../WS26Friendly:/challenges:ro
+      - ${TINY_CONTAINERS_REPO_PATH:?Set TINY_CONTAINERS_REPO_PATH in .env}:${TINY_CONTAINERS_REPO_PATH:?Set TINY_CONTAINERS_REPO_PATH in .env}:ro
+      - ${TINY_CONTAINERS_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - tiny_containers_data:/var/tiny-containers
     depends_on:
       - db
     networks:
@@ -63,7 +71,50 @@ services:
     networks:
         internal:
 
+  tiny-containers-worker:
+    image: ctfd-ctfd
+    entrypoint: ["python", "-m", "CTFd.plugins.tiny_containers.worker"]
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${CTFD_SECRET_KEY:?Set CTFD_SECRET_KEY in .env}
+      - DATABASE_URL=mysql+pymysql://ctfd:${CTFD_DB_PASSWORD:?Set CTFD_DB_PASSWORD in .env}@db/ctfd
+      - REDIS_URL=redis://:${CTFD_REDIS_PASSWORD:?Set CTFD_REDIS_PASSWORD in .env}@cache:6379
+      - TINY_CONTAINERS_REPO=${TINY_CONTAINERS_REPO_PATH:?Set TINY_CONTAINERS_REPO_PATH in .env}
+      - TINY_CONTAINERS_DOMAIN=${TINY_CONTAINERS_DOMAIN:?Set TINY_CONTAINERS_DOMAIN in .env}
+      - TINY_CONTAINERS_HTTP_PORT=${TINY_CONTAINERS_HTTP_PORT:-8080}
+      - TINY_CONTAINERS_PROXY_NETWORK=${TINY_CONTAINERS_PROXY_NETWORK:-tiny-containers-proxy}
+    volumes:
+      - .:/opt/CTFd:ro
+      - ${TINY_CONTAINERS_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - tiny_containers_data:/var/tiny-containers
+    depends_on:
+      - db
+      - cache
+    networks:
+      default:
+      internal:
+
+  tiny-containers-traefik:
+    image: traefik:v2.11
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${TINY_CONTAINERS_PROXY_NETWORK:-tiny-containers-proxy}
+      - --entrypoints.web.address=:80
+    ports:
+      - "${TINY_CONTAINERS_HTTP_BIND:-0.0.0.0}:${TINY_CONTAINERS_HTTP_PORT:-8080}:80"
+    volumes:
+      - ${TINY_CONTAINERS_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
+    networks:
+      proxy:
+
 networks:
     default:
     internal:
         internal: true
+    proxy:
+        name: ${TINY_CONTAINERS_PROXY_NETWORK:-tiny-containers-proxy}
+
+volumes:
+    tiny_containers_data:
