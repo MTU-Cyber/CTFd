@@ -11,7 +11,6 @@ DATA_DIR = Path(os.environ.get("TINY_CONTAINERS_DATA", "/var/tiny-containers"))
 REPO_DIR = Path(os.environ.get("TINY_CONTAINERS_REPO", "/challs"))
 DOMAIN = os.environ.get("TINY_CONTAINERS_DOMAIN", "").strip(".")
 PROXY_NETWORK = os.environ.get("TINY_CONTAINERS_PROXY_NETWORK", "tiny-containers-proxy")
-PUBLIC_HTTP_PORT = int(os.environ.get("TINY_CONTAINERS_HTTP_PORT", "8080"))
 
 
 def _docker(*args, timeout=300):
@@ -84,8 +83,7 @@ def endpoint(record):
         if not DOMAIN:
             raise ValueError("TINY_CONTAINERS_DOMAIN is not configured")
         return f"nc {DOMAIN} {record.host_port}"
-    port = "" if PUBLIC_HTTP_PORT == 80 else f":{PUBLIC_HTTP_PORT}"
-    return f"http://{hostname(record.subdomain)}{port}"
+    return f"http://{hostname(record.subdomain)}"
 
 
 def project(challenge_id):
